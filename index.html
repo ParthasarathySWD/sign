@@ -746,8 +746,149 @@ See https://github.com/adobe-type-tools/cmap-resources
     <style>
     </style>
     <script>
-      // Drag & Drop for signatures
+      // Utility to add controls (delete, resize) to a signature wrapper
+      function addSignatureControls(wrapper, img) {
+        // Delete button
+        const delBtn = document.createElement('button');
+        delBtn.innerHTML = '&times;';
+        delBtn.title = 'Delete signature';
+        delBtn.style.position = 'absolute';
+        delBtn.style.top = '-10px';
+        delBtn.style.right = '-10px';
+        delBtn.style.width = '22px';
+        delBtn.style.height = '22px';
+        delBtn.style.background = '#f44336';
+        delBtn.style.color = '#fff';
+        delBtn.style.border = 'none';
+        delBtn.style.borderRadius = '50%';
+        delBtn.style.cursor = 'pointer';
+        delBtn.style.fontSize = '16px';
+        delBtn.style.zIndex = 2100;
+        delBtn.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          wrapper.remove();
+        });
+
+        // Add border for resize effect
+        wrapper.style.boxSizing = 'border-box';
+        wrapper.style.border = '2px dashed #1976d2';
+
+        // Initial size
+        let width = img.naturalWidth ? Math.min(img.naturalWidth, 200) : 200;
+        let height = img.naturalHeight ? Math.min(img.naturalHeight, 100) : 100;
+        img.style.width = width + 'px';
+        img.style.height = height + 'px';
+
+        // 8 resize handles (corners and sides)
+        const handles = [
+          {pos: 'nw', cursor: 'nwse-resize'},
+          {pos: 'n',  cursor: 'ns-resize'},
+          {pos: 'ne', cursor: 'nesw-resize'},
+          {pos: 'e',  cursor: 'ew-resize'},
+          {pos: 'se', cursor: 'nwse-resize'},
+          {pos: 's',  cursor: 'ns-resize'},
+          {pos: 'sw', cursor: 'nesw-resize'},
+          {pos: 'w',  cursor: 'ew-resize'}
+        ];
+        let isResizing = false, startX, startY, startWidth, startHeight, startLeft, startTop, activeHandle;
+        handles.forEach(h => {
+          const handle = document.createElement('div');
+          handle.className = 'resize-handle-' + h.pos;
+          handle.style.position = 'absolute';
+          handle.style.width = '12px';
+          handle.style.height = '12px';
+          handle.style.background = '#1976d2';
+          handle.style.border = '2px solid #fff';
+          handle.style.borderRadius = '50%';
+          handle.style.cursor = h.cursor;
+          handle.style.zIndex = 2200;
+          switch(h.pos) {
+            case 'nw': handle.style.left = '-7px'; handle.style.top = '-7px'; break;
+            case 'n':  handle.style.left = '50%'; handle.style.top = '-7px'; handle.style.transform = 'translateX(-50%)'; break;
+            case 'ne': handle.style.right = '-7px'; handle.style.top = '-7px'; break;
+            case 'e':  handle.style.right = '-7px'; handle.style.top = '50%'; handle.style.transform = 'translateY(-50%)'; break;
+            case 'se': handle.style.right = '-7px'; handle.style.bottom = '-7px'; break;
+            case 's':  handle.style.left = '50%'; handle.style.bottom = '-7px'; handle.style.transform = 'translateX(-50%)'; break;
+            case 'sw': handle.style.left = '-7px'; handle.style.bottom = '-7px'; break;
+            case 'w':  handle.style.left = '-7px'; handle.style.top = '50%'; handle.style.transform = 'translateY(-50%)'; break;
+          }
+          handle.addEventListener('mousedown', function(ev) {
+            ev.stopPropagation();
+            isResizing = true;
+            activeHandle = h.pos;
+            startX = ev.clientX;
+            startY = ev.clientY;
+            startWidth = width;
+            startHeight = height;
+            startLeft = parseFloat(wrapper.style.left);
+            startTop = parseFloat(wrapper.style.top);
+            document.body.style.userSelect = 'none';
+          });
+          document.addEventListener('mousemove', function(ev) {
+            if (!isResizing) return;
+            let dx = ev.clientX - startX;
+            let dy = ev.clientY - startY;
+            let newWidth = startWidth, newHeight = startHeight, newLeft = startLeft, newTop = startTop;
+            switch(activeHandle) {
+              case 'nw':
+                newWidth = Math.max(40, startWidth - dx);
+                newHeight = Math.max(20, startHeight - dy);
+                newLeft = startLeft + dx;
+                newTop = startTop + dy;
+                break;
+              case 'n':
+                newHeight = Math.max(20, startHeight - dy);
+                newTop = startTop + dy;
+                break;
+              case 'ne':
+                newWidth = Math.max(40, startWidth + dx);
+                newHeight = Math.max(20, startHeight - dy);
+                newTop = startTop + dy;
+                break;
+              case 'e':
+                newWidth = Math.max(40, startWidth + dx);
+                break;
+              case 'se':
+                newWidth = Math.max(40, startWidth + dx);
+                newHeight = Math.max(20, startHeight + dy);
+                break;
+              case 's':
+                newHeight = Math.max(20, startHeight + dy);
+                break;
+              case 'sw':
+                newWidth = Math.max(40, startWidth - dx);
+                newHeight = Math.max(20, startHeight + dy);
+                newLeft = startLeft + dx;
+                break;
+              case 'w':
+                newWidth = Math.max(40, startWidth - dx);
+                newLeft = startLeft + dx;
+                break;
+            }
+            width = Math.min(newWidth, 400);
+            height = Math.min(newHeight, 200);
+            wrapper.style.left = newLeft + 'px';
+            wrapper.style.top = newTop + 'px';
+            img.style.width = width + 'px';
+            img.style.height = height + 'px';
+          });
+          document.addEventListener('mouseup', function() {
+            if (isResizing) {
+              isResizing = false;
+              document.body.style.userSelect = '';
+            }
+          });
+          wrapper.appendChild(handle);
+        });
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(delBtn);
+      }
+
+      // Drag & Drop for signatures with resize controls
       document.addEventListener('DOMContentLoaded', function() {
+      // ...existing code...
+
         const signatureImgs = document.querySelectorAll('.signature-img');
         signatureImgs.forEach(img => {
           img.addEventListener('dragstart', function(e) {
@@ -784,7 +925,7 @@ See https://github.com/adobe-type-tools/cmap-resources
           const scrollTop = viewerContainer.scrollTop;
           const x = e.clientX - viewerRect.left + scrollLeft;
           const y = e.clientY - viewerRect.top + scrollTop;
-          // Create a wrapper div for the signature and delete button
+          // Create a wrapper div for the signature and controls
           const wrapper = document.createElement('div');
           wrapper.style.position = 'absolute';
           wrapper.style.left = x + 'px';
@@ -795,34 +936,11 @@ See https://github.com/adobe-type-tools/cmap-resources
           // Signature image
           const img = document.createElement('img');
           img.src = imgSrc;
-          img.style.maxWidth = '200px';
-          img.style.maxHeight = '100px';
           img.style.cursor = 'move';
           img.draggable = false;
           img.style.pointerEvents = 'auto';
           img.style.display = 'block';
-          // Delete button
-          const delBtn = document.createElement('button');
-          delBtn.innerHTML = '&times;';
-          delBtn.title = 'Delete signature';
-          delBtn.style.position = 'absolute';
-          delBtn.style.top = '-10px';
-          delBtn.style.right = '-10px';
-          delBtn.style.width = '22px';
-          delBtn.style.height = '22px';
-          delBtn.style.background = '#f44336';
-          delBtn.style.color = '#fff';
-          delBtn.style.border = 'none';
-          delBtn.style.borderRadius = '50%';
-          delBtn.style.cursor = 'pointer';
-          delBtn.style.fontSize = '16px';
-          delBtn.style.zIndex = 2100;
-          delBtn.addEventListener('click', function(ev) {
-            ev.stopPropagation();
-            wrapper.remove();
-          });
-          wrapper.appendChild(img);
-          wrapper.appendChild(delBtn);
+          addSignatureControls(wrapper, img);
           overlay.appendChild(wrapper);
           // Make the dropped image draggable inside overlay
           let offsetX, offsetY, isDragging = false;
@@ -897,11 +1015,11 @@ See https://github.com/adobe-type-tools/cmap-resources
               const top = pageRect.top - overlayRect.top;
               // Use the rendered page width for right edge
               const pageWidth = pageDiv.offsetWidth;
-              // Create wrapper for signature and delete button
+              // Create wrapper for signature and controls
               const wrapper = document.createElement('div');
               wrapper.style.position = 'absolute';
               // Place 10px from top, 10px from right edge of the page
-              wrapper.style.left = (left + pageWidth - 200 - 10) + 'px'; // 200px = maxWidth
+              wrapper.style.left = (left + pageWidth - 200 - 10) + 'px'; // 200px = default width
               wrapper.style.top = (top + 10) + 'px';
               wrapper.style.display = 'inline-block';
               wrapper.style.zIndex = 2000;
@@ -909,34 +1027,11 @@ See https://github.com/adobe-type-tools/cmap-resources
               // Signature image
               const imgElem = document.createElement('img');
               imgElem.src = imgSrc;
-              imgElem.style.maxWidth = '200px';
-              imgElem.style.maxHeight = '100px';
               imgElem.style.cursor = 'move';
               imgElem.draggable = false;
               imgElem.style.pointerEvents = 'auto';
               imgElem.style.display = 'block';
-              // Delete button
-              const delBtn = document.createElement('button');
-              delBtn.innerHTML = '&times;';
-              delBtn.title = 'Delete signature';
-              delBtn.style.position = 'absolute';
-              delBtn.style.top = '-10px';
-              delBtn.style.right = '-10px';
-              delBtn.style.width = '22px';
-              delBtn.style.height = '22px';
-              delBtn.style.background = '#f44336';
-              delBtn.style.color = '#fff';
-              delBtn.style.border = 'none';
-              delBtn.style.borderRadius = '50%';
-              delBtn.style.cursor = 'pointer';
-              delBtn.style.fontSize = '16px';
-              delBtn.style.zIndex = 2100;
-              delBtn.addEventListener('click', function(ev) {
-                ev.stopPropagation();
-                wrapper.remove();
-              });
-              wrapper.appendChild(imgElem);
-              wrapper.appendChild(delBtn);
+              addSignatureControls(wrapper, imgElem);
               overlay.appendChild(wrapper);
               // Make draggable
               let offsetX, offsetY, isDragging = false;
