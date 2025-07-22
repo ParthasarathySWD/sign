@@ -746,6 +746,7 @@ See https://github.com/adobe-type-tools/cmap-resources
     <style>
     </style>
     <script>
+      window.pdfUrl = 'compressed.tracemonkey-pldi-09.pdf';
       // Utility to add controls (delete, resize) to a signature wrapper
       function addSignatureControls(wrapper, img) {
         // Delete button
@@ -763,7 +764,7 @@ See https://github.com/adobe-type-tools/cmap-resources
         delBtn.style.borderRadius = '50%';
         delBtn.style.cursor = 'pointer';
         delBtn.style.fontSize = '16px';
-        delBtn.style.zIndex = 2100;
+        delBtn.style.zIndex = 2300; // Ensure close button is always on top
         delBtn.addEventListener('click', function(ev) {
           ev.stopPropagation();
           wrapper.remove();
@@ -805,7 +806,7 @@ See https://github.com/adobe-type-tools/cmap-resources
           switch(h.pos) {
             case 'nw': handle.style.left = '-7px'; handle.style.top = '-7px'; break;
             case 'n':  handle.style.left = '50%'; handle.style.top = '-7px'; handle.style.transform = 'translateX(-50%)'; break;
-            case 'ne': handle.style.right = '-7px'; handle.style.top = '-7px'; break;
+            case 'ne': handle.style.right = '18px'; handle.style.top = '-7px'; break; // Move NE handle left to avoid close button
             case 'e':  handle.style.right = '-7px'; handle.style.top = '50%'; handle.style.transform = 'translateY(-50%)'; break;
             case 'se': handle.style.right = '-7px'; handle.style.bottom = '-7px'; break;
             case 's':  handle.style.left = '50%'; handle.style.bottom = '-7px'; handle.style.transform = 'translateX(-50%)'; break;
@@ -1058,6 +1059,115 @@ See https://github.com/adobe-type-tools/cmap-resources
           img.parentElement.appendChild(btn);
         }
       });
+    // --- Save as PDF functionality ---
+    // Add Save as PDF button to toolbar
+    document.addEventListener('DOMContentLoaded', function() {
+      const toolbar = document.getElementById('toolbarViewerRight') || document.getElementById('toolbarContainer');
+      if (toolbar && !document.getElementById('savePdfBtn')) {
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'savePdfBtn';
+        saveBtn.textContent = 'Save as PDF';
+        saveBtn.style.marginLeft = '10px';
+        saveBtn.style.background = '#388e3c';
+        saveBtn.style.color = '#fff';
+        saveBtn.style.border = 'none';
+        saveBtn.style.borderRadius = '3px';
+        saveBtn.style.cursor = 'pointer';
+        saveBtn.style.fontSize = '16px';
+        saveBtn.style.padding = '6px 16px';
+        toolbar.appendChild(saveBtn);
+        saveBtn.addEventListener('click', async function() {
+          // Collect all placed signatures
+          const overlay = document.getElementById('imageOverlayContainer');
+          const viewer = document.getElementById('viewer');
+          const pdfUrl = window.pdfUrl || document.querySelector('input[type="file"]')?.files?.[0]; // Adjust as needed
+          if (!pdfUrl) { alert('Original PDF not found.'); return; }
+          // Get page positions and PDF.js page sizes
+          const pageDivs = Array.from(viewer.querySelectorAll('[data-page-number]'));
+          const overlayRect = overlay.getBoundingClientRect();
+          // Get PDF.js page sizes in points (1pt = 1/72 inch)
+          let pdfPageSizes = [];
+          if (window.PDFViewerApplication && window.PDFViewerApplication.pdfDocument) {
+            const pdfDoc = window.PDFViewerApplication.pdfDocument;
+            for (let i = 1; i <= pageDivs.length; i++) {
+              // eslint-disable-next-line no-await-in-loop
+              const page = await pdfDoc.getPage(i);
+              const view = page.view; // [xMin, yMin, xMax, yMax] in points
+              pdfPageSizes.push({
+                width: view[2] - view[0],
+                height: view[3] - view[1]
+              });
+            }
+          } else {
+            // fallback: assume A4 595x842pt
+            for (let i = 0; i < pageDivs.length; i++) pdfPageSizes.push({width: 595, height: 842});
+          }
+          const signatures = [];
+          overlay.querySelectorAll('div').forEach(wrapper => {
+            const img = wrapper.querySelector('img');
+            if (!img) return;
+            // Find which page this signature is on
+            let pageNum = 1;
+            let found = false;
+            let wx = parseFloat(wrapper.style.left), wy = parseFloat(wrapper.style.top);
+            let wWidth = img.offsetWidth, wHeight = img.offsetHeight;
+            for (let i = 0; i < pageDivs.length; i++) {
+              const pageRect = pageDivs[i].getBoundingClientRect();
+              const left = pageRect.left - overlayRect.left;
+              const top = pageRect.top - overlayRect.top;
+              const right = left + pageDivs[i].offsetWidth;
+              const bottom = top + pageDivs[i].offsetHeight;
+              if (wx >= left && wx <= right && wy >= top && wy <= bottom) {
+                pageNum = parseInt(pageDivs[i].getAttribute('data-page-number'));
+                found = true;
+                // Convert overlay px to page px
+                wx = wx - left;
+                wy = wy - top;
+                // Now convert to PDF points
+                const renderedW = pageDivs[i].offsetWidth;
+                const renderedH = pageDivs[i].offsetHeight;
+                const pdfW = pdfPageSizes[i].width;
+                const pdfH = pdfPageSizes[i].height;
+                wx = wx * (pdfW / renderedW);
+                wy = wy * (pdfH / renderedH);
+                wWidth = wWidth * (pdfW / renderedW);
+                wHeight = wHeight * (pdfH / renderedH);
+                break;
+              }
+            }
+            signatures.push({
+              page: pageNum,
+              x: wx,
+              y: wy,
+              width: wWidth,
+              height: wHeight,
+              image: img.src
+            });
+          });
+          // Prepare form data
+          const formData = new FormData();
+          if (pdfUrl instanceof File) {
+            formData.append('pdf_file', pdfUrl);
+          } else {
+            formData.append('pdf_url', pdfUrl);
+          }
+          formData.append('signatures', JSON.stringify(signatures));
+          fetch('save_signed_pdf.php', {
+            method: 'POST',
+            body: formData
+          })
+          .then(r => r.json())
+          .then(data => {
+            if (data.success && data.file) {
+              window.open(data.file, '_blank');
+            } else {
+              alert('Failed to save PDF.');
+            }
+          })
+          .catch(() => alert('Error saving PDF.'));
+        });
+      }
+    });
     </script>
   </body>
 </html>
