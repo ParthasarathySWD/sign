@@ -19,7 +19,7 @@ if (!$pdfPath || !file_exists($pdfPath)) {
 $signatures = isset($_POST['signatures']) ? json_decode($_POST['signatures'], true) : [];
 if (!is_array($signatures)) $signatures = [];
 
-$pdf = new Fpdi();
+$pdf = new Fpdi('P', 'pt');
 $pageCount = $pdf->setSourceFile($pdfPath);
 
 for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
