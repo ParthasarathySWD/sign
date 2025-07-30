@@ -747,6 +747,74 @@ See https://github.com/adobe-type-tools/cmap-resources
     </style>
     <script>
       window.pdfUrl = 'compressed.tracemonkey-pldi-09.pdf';
+      // Load and render signatures from DB for the current PDF
+      function loadSignatures(pdfId) {
+        fetch('get_signatures.php?pdf_id=' + encodeURIComponent(pdfId))
+          .then(res => res.json())
+          .then(signatures => {
+            const overlay = document.getElementById('imageOverlayContainer');
+            if (!overlay) return;
+            // Remove any existing loaded signatures
+            Array.from(overlay.querySelectorAll('.db-signature')).forEach(el => el.remove());
+            const viewer = document.getElementById('viewer');
+            const pageDivs = Array.from(viewer.querySelectorAll('[data-page-number]'));
+            const overlayRect = overlay.getBoundingClientRect();
+            // Get PDF.js page sizes in points (1pt = 1/72 inch)
+            let pdfPageSizes = [];
+            if (window.PDFViewerApplication && window.PDFViewerApplication.pdfDocument) {
+              const pdfDoc = window.PDFViewerApplication.pdfDocument;
+              // Use a promise chain to get all page sizes
+              Promise.all(
+                pageDivs.map((_, i) => pdfDoc.getPage(i + 1).then(page => {
+                  const view = page.view;
+                  return { width: view[2] - view[0], height: view[3] - view[1] };
+                }))
+              ).then(pageSizes => {
+                pdfPageSizes = pageSizes;
+                signatures.forEach(sig => {
+                  // Find the page div for this signature
+                  let pageIdx = 0;
+                  if (sig.page) {
+                    // Try to match by data-page-number attribute
+                    pageIdx = pageDivs.findIndex(div => parseInt(div.getAttribute('data-page-number')) === parseInt(sig.page));
+                    if (pageIdx === -1) pageIdx = 0;
+                  }
+                  const pageDiv = pageDivs[pageIdx];
+                  if (!pageDiv) return;
+                  // Use offsetLeft/offsetTop for placement relative to overlay
+                  const left = pageDiv.offsetLeft;
+                  const top = pageDiv.offsetTop;
+                  const renderedW = pageDiv.offsetWidth;
+                  const renderedH = pageDiv.offsetHeight;
+                  const pdfW = pdfPageSizes[pageIdx]?.width || 595;
+                  const pdfH = pdfPageSizes[pageIdx]?.height || 842;
+                  // Convert PDF points to rendered px
+                  const px = sig.x * (renderedW / pdfW);
+                  const py = sig.y * (renderedH / pdfH);
+                  const pwidth = sig.width * (renderedW / pdfW);
+                  const pheight = sig.height * (renderedH / pdfH);
+                  // Place relative to the page
+                  const wrapper = document.createElement('div');
+                  wrapper.className = 'db-signature';
+                  wrapper.style.position = 'absolute';
+                  wrapper.style.left = (left + px) + 'px';
+                  wrapper.style.top = (top + py) + 'px';
+                  wrapper.style.zIndex = 1800;
+                  wrapper.style.pointerEvents = 'auto';
+                  // Signature image
+                  const img = document.createElement('img');
+                  img.src = sig.image_path || sig.image_url || sig.image;
+                  img.style.width = pwidth + 'px';
+                  img.style.height = pheight + 'px';
+                  img.style.display = 'block';
+                  img.style.pointerEvents = 'auto';
+                  addSignatureControls(wrapper, img);
+                  overlay.appendChild(wrapper);
+                });
+              });
+            }
+          });
+      }
       // Utility to add controls (delete, resize) to a signature wrapper
       function addSignatureControls(wrapper, img) {
         // Delete button
@@ -889,6 +957,13 @@ See https://github.com/adobe-type-tools/cmap-resources
       // Drag & Drop for signatures with resize controls
       document.addEventListener('DOMContentLoaded', function() {
       // ...existing code...
+        // After PDF is loaded, call loadSignatures with the PDF id
+        // Replace with your actual PDF id logic if needed
+        const pdfId = window.pdfUrl;
+        // Wait for PDF.js to finish rendering (simple delay, replace with event if available)
+        setTimeout(() => {
+          loadSignatures(pdfId);
+        }, 1200);
 
         const signatureImgs = document.querySelectorAll('.signature-img');
         signatureImgs.forEach(img => {

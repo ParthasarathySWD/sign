@@ -1,5 +1,7 @@
+
 <?php
 require 'vendor/autoload.php';
+require_once __DIR__ . '/store_signature.php';
 use setasign\Fpdi\Fpdi;
 
 header('Content-Type: application/json');
@@ -40,6 +42,9 @@ for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
             }
             if ($imgPath) {
                 $pdf->Image($imgPath, $sig['x'], $sig['y'], $sig['width'], $sig['height']);
+                // Store signature details in DB
+                // Use pdf_id = 0 unless you have a real PDF id
+                store_signature(0, $pageNo, $imgPath, $sig['x'], $sig['y'], $sig['width'], $sig['height']);
                 if (isset($imgData)) unlink($imgPath);
             }
         }
