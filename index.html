@@ -34,16 +34,37 @@ See https://github.com/adobe-type-tools/cmap-resources
     <link rel="stylesheet" href="pdfjs/web/viewer.css">
 
   <script src="pdfjs/web/viewer.mjs" type="module"></script>
+  <style>
+    .signature-row img {
+      max-width: 80px;
+      max-height: 30px;
+    }
+  </style>
   </head>
 
   <body tabindex="0" style="display: flex;">
-    <div id="signatureSidebar" style="width:10%;height:100vh;background:#f7f7f7;z-index:1000;overflow-y:auto;box-shadow:2px 0 5px rgba(0,0,0,0.05);">
+    <div id="signatureSidebar" style="width:10%;height:100vh;background:#f7f7f7;z-index:10001;overflow-y:auto;box-shadow:2px 0 5px rgba(0,0,0,0.05);">
       <h4 style="text-align:center;margin:10px 0;">Signatures</h4>
       <div id="signatureList" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px;">
         <!-- Example signature images, replace src with your own -->
-        <img src="signatures/sign1.png" class="signature-img" draggable="true" style="width:80px;cursor:grab;border:1px solid #ccc;border-radius:4px;" />
-        <img src="signatures/sign2.png" class="signature-img" draggable="true" style="width:80px;cursor:grab;border:1px solid #ccc;border-radius:4px;" />
-        <img src="signatures/sign3.png" class="signature-img" draggable="true" style="width:80px;cursor:grab;border:1px solid #ccc;border-radius:4px;" />
+        <div class="signature-row">
+          <img src="signatures/sign1.png" class="signature-img" draggable="true" style="width:80px;cursor:grab;border:1px solid #ccc;border-radius:4px;" />
+          <button class="signature-menu-btn" title="Set date/time" style="background:none;border:none;cursor:pointer;padding:0 6px;vertical-align:middle;">
+            <span style="font-size:22px;">&#8942;</span>
+          </button>
+        </div>
+        <div class="signature-row">
+          <img src="signatures/sign2.png" class="signature-img" draggable="true" style="width:80px;cursor:grab;border:1px solid #ccc;border-radius:4px;" />
+          <button class="signature-menu-btn" title="Set date/time" style="background:none;border:none;cursor:pointer;padding:0 6px;vertical-align:middle;">
+            <span style="font-size:22px;">&#8942;</span>
+          </button>
+        </div>
+        <div class="signature-row">
+          <img src="signatures/sign3.png" class="signature-img" draggable="true" style="width:80px;cursor:grab;border:1px solid #ccc;border-radius:4px;" />
+          <button class="signature-menu-btn" title="Set date/time" style="background:none;border:none;cursor:pointer;padding:0 6px;vertical-align:middle;">
+            <span style="font-size:22px;">&#8942;</span>
+          </button>
+        </div>
       </div>
     </div>
     <div id="outerContainer" style="width: 90%;">
@@ -744,9 +765,201 @@ See https://github.com/adobe-type-tools/cmap-resources
 
     <!-- Signature Sidebar -->
     <style>
+    .signature-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+      position: relative;
+    }
+    .signature-menu-popup {
+      position: absolute;
+      left: 100px;
+      top: 30px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      padding: 16px 18px 12px 18px;
+      z-index: 9999;
+      min-width: 220px;
+      display: none;
+    }
+    .signature-menu-popup label {
+      font-size: 14px;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .signature-menu-popup input[type="date"],
+    .signature-menu-popup input[type="time"] {
+      margin-bottom: 10px;
+      width: 100%;
+      font-size: 15px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #bbb;
+    }
+    .signature-menu-popup .popup-close-btn {
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font-size: 15px;
+      float: right;
+      margin-top: 6px;
+    }
+    .signature-menu-popup .popup-save-btn {
+      background: #388e3c;
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font-size: 15px;
+      float: left;
+      margin-top: 6px;
+    }
+    .signature-menu-popup .popup-row {
+      margin-bottom: 8px;
+      clear: both;
+    }
+    .signature-menu-popup .popup-row:last-child {
+      margin-bottom: 0;
+    }
+    .signature-menu-popup .popup-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+    }
     </style>
     <script>
       window.pdfUrl = 'compressed.tracemonkey-pldi-09.pdf';
+
+
+      // Modal logic for signature menu buttons
+      document.addEventListener('DOMContentLoaded', function() {
+        // Create modal element once
+        let modal = document.getElementById('signatureMenuModal');
+        if (!modal) {
+          modal = document.createElement('div');
+          modal.id = 'signatureMenuModal';
+          modal.style.position = 'fixed';
+          modal.style.left = '0';
+          modal.style.top = '0';
+          modal.style.width = '100vw';
+          modal.style.height = '100vh';
+          modal.style.background = 'rgba(0,0,0,0.25)';
+          modal.style.zIndex = '99999';
+          modal.style.display = 'none';
+          modal.innerHTML = `
+            <div id="signatureMenuModalContent" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.18);padding:28px 32px 18px 32px;min-width:260px;max-width:90vw;">
+              <div class="popup-row">
+                <label for="modal-date">Date:</label>
+                <input type="date" id="modal-date" />
+              </div>
+              <div class="popup-row">
+                <label for="modal-time">Time:</label>
+                <input type="time" id="modal-time" />
+              </div>
+              <div class="popup-actions" style="margin-top:16px;display:flex;justify-content:space-between;">
+                <button class="popup-save-btn" style="background:#388e3c;color:#fff;border:none;border-radius:3px;padding:6px 18px;cursor:pointer;font-size:16px;">Save</button>
+                <button class="popup-close-btn" style="background:#1976d2;color:#fff;border:none;border-radius:3px;padding:6px 18px;cursor:pointer;font-size:16px;">Close</button>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(modal);
+        }
+
+        // Track which signature row opened the modal
+        let activeSignatureRow = null;
+
+        document.querySelectorAll('.signature-row').forEach(function(row) {
+          const btn = row.querySelector('.signature-menu-btn');
+          if (!btn) return;
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            activeSignatureRow = row;
+            // Set modal fields to current date/time by default
+            const now = new Date();
+            // Format date as yyyy-MM-dd for input[type=date]
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            modal.querySelector('#modal-date').value = `${yyyy}-${mm}-${dd}`;
+            // Format time as HH:mm for input[type=time]
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const sec = String(now.getSeconds()).padStart(2, '0');
+            modal.querySelector('#modal-time').value = `${hh}:${min}:${sec}`;
+            modal.style.display = 'block';
+          });
+        });
+
+        // Close button
+        modal.querySelector('.popup-close-btn').addEventListener('click', function(e) {
+          e.stopPropagation();
+          modal.style.display = 'none';
+        });
+        // Save button: merge signature image and date/time into a new image (with formatted date/time)
+        modal.querySelector('.popup-save-btn').addEventListener('click', function(e) {
+          e.stopPropagation();
+          modal.style.display = 'none';
+          let dateVal = modal.querySelector('#modal-date').value;
+          let timeVal = modal.querySelector('#modal-time').value;
+          // Format date/time as MM/dd/YYYY hh:mm:ss am/pm
+          function formatDateTime(dateStr, timeStr) {
+            if (!dateStr && !timeStr) return '';
+            let out = '';
+            if (dateStr) {
+              // dateStr is yyyy-MM-dd
+              const [yyyy, mm, dd] = dateStr.split('-');
+              out += `${mm}/${dd}/${yyyy}`;
+            }
+            if (timeStr) {
+              // timeStr is HH:mm:ss or HH:mm
+              let [h, m, s] = timeStr.split(':');
+              s = s || '00';
+              let hour = parseInt(h, 10);
+              let ampm = hour >= 12 ? 'PM' : 'AM';
+              hour = hour % 12;
+              if (hour === 0) hour = 12;
+              out += (dateStr ? ' ' : '') + `${String(hour).padStart(2, '0')}:${m}:${s} ${ampm}`;
+            }
+            return out;
+          }
+          let formatted = formatDateTime(dateVal, timeVal);
+          if (activeSignatureRow) {
+            let img = activeSignatureRow.querySelector('.signature-img');
+            if (img && formatted) {
+              // Create a canvas to merge image and text
+              let canvas = document.createElement('canvas');
+              let ctx = canvas.getContext('2d');
+              let imgWidth = img.naturalWidth || img.width || 80;
+              let imgHeight = img.naturalHeight || img.height || 80;
+              let textHeight = 28;
+              canvas.width = imgWidth;
+              canvas.height = imgHeight + textHeight;
+              ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
+              ctx.fillStyle = '#444';
+              ctx.font = '15px Arial';
+              ctx.textAlign = 'center';
+              ctx.fillText(formatted, imgWidth / 2, imgHeight + 18);
+              img.src = canvas.toDataURL('image/png');
+              img.style.width = imgWidth + 'px';
+              img.style.height = (imgHeight + textHeight) + 'px';
+            }
+          }
+        });
+        // Hide modal if clicking outside content
+        modal.addEventListener('click', function(e) {
+          if (e.target === modal) {
+            modal.style.display = 'none';
+          }
+        });
+      });
       // Load and render signatures from DB for the current PDF
       function loadSignatures(pdfId) {
         fetch('get_signatures.php?pdf_id=' + encodeURIComponent(pdfId))
@@ -809,6 +1022,26 @@ See https://github.com/adobe-type-tools/cmap-resources
                   img.style.display = 'block';
                   img.style.pointerEvents = 'auto';
                   addSignatureControls(wrapper, img);
+                  // Make DB signature draggable (like manual ones)
+                  let offsetX, offsetY, isDragging = false;
+                  img.addEventListener('mousedown', function(ev) {
+                    isDragging = true;
+                    offsetX = ev.offsetX;
+                    offsetY = ev.offsetY;
+                    ev.preventDefault();
+                  });
+                  document.addEventListener('mousemove', function(ev) {
+                    if (isDragging) {
+                      const overlayRect = overlay.getBoundingClientRect();
+                      let newX = ev.clientX - overlayRect.left - offsetX + overlay.scrollLeft;
+                      let newY = ev.clientY - overlayRect.top - offsetY + overlay.scrollTop;
+                      wrapper.style.left = newX + 'px';
+                      wrapper.style.top = newY + 'px';
+                    }
+                  });
+                  document.addEventListener('mouseup', function () {
+                    isDragging = false;
+                  });
                   overlay.appendChild(wrapper);
                 });
               });
@@ -1231,7 +1464,7 @@ See https://github.com/adobe-type-tools/cmap-resources
             method: 'POST',
             body: formData
           })
-          .then(r => r.json())
+          .then (r => r.json())
           .then(data => {
             if (data.success && data.file) {
               window.open(data.file, '_blank');

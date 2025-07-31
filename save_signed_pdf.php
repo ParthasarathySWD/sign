@@ -5,6 +5,10 @@ require_once __DIR__ . '/store_signature.php';
 use setasign\Fpdi\Fpdi;
 
 header('Content-Type: application/json');
+define('FCPATH', __DIR__ );
+define('SIGNATURES_DIR', FCPATH . '/signatures/');
+define('TEMP_DIR', sys_get_temp_dir() . '/');
+define('OUTPUT_DIR', FCPATH . '/output/');
 
 // Handle file upload or URL
 $pdfPath = null;
@@ -35,8 +39,11 @@ for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
             $imgPath = null;
             if (strpos($sig['image'], 'base64,') !== false) {
                 $imgData = explode(',', $sig['image'])[1];
-                $imgPath = tempnam(sys_get_temp_dir(), 'sig') . '.png';
-                file_put_contents($imgPath, base64_decode($imgData));
+                $imgPath = 'signatures/img-' . uniqid() . '.png';
+                if(!file_put_contents($imgPath, base64_decode($imgData))) {
+                    echo json_encode(['success' => false, 'error' => 'Failed to save signature image']);
+                    exit;
+                }
             } elseif (strpos($sig['image'], 'http') === 0 || file_exists($sig['image'])) {
                 $imgPath = $sig['image'];
             }
@@ -45,7 +52,7 @@ for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
                 // Store signature details in DB
                 // Use pdf_id = 0 unless you have a real PDF id
                 store_signature(0, $pageNo, $imgPath, $sig['x'], $sig['y'], $sig['width'], $sig['height']);
-                if (isset($imgData)) unlink($imgPath);
+                // if (isset($imgData)) unlink($imgPath);
             }
         }
     }
